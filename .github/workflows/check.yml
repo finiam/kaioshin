@@ -33,25 +33,11 @@ jobs:
         run: >
           sudo apt-get update && sudo apt-get install -y
           clang llvm libudev-dev protobuf-compiler
-      - name: Clone cranelift
-        uses: actions/checkout@v3
-        with:
-          repository: bjorn3/rustc_codegen_cranelift
-          path: './rustc_codegen_cranelift'
-      - name: Move cranelift
-        run: >
-          mv rustc_codegen_cranelift /tmp/rustc_codegen_cranelift
-      - uses: Swatinem/rust-cache@v2
-      - name: Set-Up cranelift
-        working-directory: '/tmp/rustc_codegen_cranelift'
-        run: >
-          ./y.rs prepare && ./y.rs build && echo "$(pwd)/dist/" >> $GITHUB_PATH
-        shell: bash
       - uses: Swatinem/rust-cache@v2
       - name: Check Build and run tests
         run: |
-          SKIP_WASM_BUILD=1 cargo-clif check --release
-          SKIP_WASM_BUILD=1 cargo-clif test --all
+          SKIP_WASM_BUILD=1 cargo check --release
+          SKIP_WASM_BUILD=1 cargo test --all
         shell: bash
 
           #  bench:
