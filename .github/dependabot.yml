@@ -11,3 +11,9 @@ updates:
       interval: "weekly"
     allow:
       - dependency-name: "blockifier"
+      # match all substrate dependencies
+      - dependency-name: "frame-*"
+      - dependency-name: "sp-*"
+      - dependency-name: "sc-*"
+      - dependency-name: "substrate-*"
+      - dependency-name: "pallet-*"
