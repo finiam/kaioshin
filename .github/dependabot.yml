@@ -10,11 +10,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
-    allow:
-      - dependency-name: "blockifier"
+    ignore:
       # match all substrate dependencies
-#       - dependency-name: "frame-*"
-      - dependency-name: "sp-core"
-#       - dependency-name: "sc-*"
-#       - dependency-name: "substrate-*"
-#       - dependency-name: "pallet-*"
+      - dependency-name: "frame-*"
+      - dependency-name: "sp-*"
+      - dependency-name: "sc-*"
+      - dependency-name: "substrate-*"
+      - dependency-name: "pallet-*"
