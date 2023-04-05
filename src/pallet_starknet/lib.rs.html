@@ -771,6 +771,35 @@
 <a href="#771" id="771">771</a>
 <a href="#772" id="772">772</a>
 <a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
 </pre><pre class="rust"><code><span class="comment">// Ensure we&#39;re `no_std` when compiling for Wasm.
 </span><span class="attr">#![cfg_attr(not(feature = <span class="string">&quot;std&quot;</span>), no_std)]
 #![allow(clippy::large_enum_variant)]
@@ -793,6 +822,9 @@
 
 <span class="doccomment">/// State root logic.
 </span><span class="kw">pub mod </span>state_root;
+
+<span class="doccomment">/// The Starknet pallet&#39;s runtime API
+</span><span class="kw">pub mod </span>runtime_api;
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>mock;
@@ -833,28 +865,31 @@
     <span class="kw">pub use </span>alloc::{format, vec};
 
     <span class="kw">use </span>blockifier::execution::entry_point::CallInfo;
-    <span class="comment">// use blockifier::execution::contract_class::ContractClass;
-    </span><span class="kw">use </span>blockifier::state::cached_state::{CachedState, ContractClassMapping, ContractStorageKey};
+    <span class="kw">use </span>blockifier::state::cached_state::{CachedState, ContractClassMapping, ContractStorageKey};
+    <span class="kw">use </span>blockifier::state::state_api::State;
     <span class="kw">use </span>frame_support::pallet_prelude::<span class="kw-2">*</span>;
     <span class="kw">use </span>frame_support::sp_runtime::offchain::storage::StorageValueRef;
     <span class="kw">use </span>frame_support::traits::{OriginTrait, Time};
     <span class="kw">use </span>frame_system::pallet_prelude::<span class="kw-2">*</span>;
+    <span class="kw">use </span>mp_digest_log::{PostLog, MADARA_ENGINE_ID};
+    <span class="kw">use </span>mp_starknet::block::{Block <span class="kw">as </span>StarknetBlock, Header <span class="kw">as </span>StarknetHeader};
     <span class="kw">use </span>mp_starknet::crypto::commitment;
     <span class="kw">use </span>mp_starknet::crypto::hash::pedersen::PedersenHasher;
     <span class="kw">use </span>mp_starknet::execution::{ClassHashWrapper, ContractAddressWrapper, ContractClassWrapper};
-    <span class="kw">use </span>mp_starknet::starknet_block::block::Block;
-    <span class="kw">use </span>mp_starknet::starknet_block::header::Header;
     <span class="kw">use </span>mp_starknet::state::DictStateReader;
-    <span class="kw">use </span>mp_starknet::storage::{StarknetStorageSchema, PALLET_STARKNET_SCHEMA};
+    <span class="kw">use </span>mp_starknet::storage::{StarknetStorageSchemaVersion, PALLET_STARKNET_SCHEMA};
     <span class="kw">use </span>mp_starknet::traits::hash::Hasher;
-    <span class="kw">use </span>mp_starknet::transaction::types::{EventError, EventWrapper <span class="kw">as </span>StarknetEventType, Transaction, TxType};
+    <span class="kw">use </span>mp_starknet::transaction::types::{
+        EventError, EventWrapper <span class="kw">as </span>StarknetEventType, StateDiffError, Transaction, TxType,
+    };
     <span class="kw">use </span>serde_json::from_str;
     <span class="kw">use </span>sp_core::{H256, U256};
     <span class="kw">use </span>sp_runtime::offchain::http;
     <span class="kw">use </span>sp_runtime::traits::UniqueSaturatedInto;
+    <span class="kw">use </span>sp_runtime::DigestItem;
     <span class="kw">use </span>starknet_api::api_core::{ClassHash, ContractAddress, Nonce};
     <span class="kw">use </span>starknet_api::hash::StarkFelt;
-    <span class="kw">use </span>starknet_api::state::StorageKey;
+    <span class="kw">use </span>starknet_api::state::{StateDiff, StorageKey};
     <span class="kw">use </span>starknet_api::stdlib::collections::HashMap;
     <span class="kw">use </span>starknet_api::StarknetApiError;
     <span class="kw">use </span>types::{EthBlockNumber, OffchainWorkerError};
@@ -929,7 +964,7 @@
     <span class="doccomment">/// The current Starknet block.
     </span><span class="attr">#[pallet::storage]
     #[pallet::getter(<span class="kw">fn </span>current_block)]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>CurrentBlock&lt;T: Config&gt; = StorageValue&lt;<span class="kw">_</span>, Block&gt;;
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>CurrentBlock&lt;T: Config&gt; = StorageValue&lt;<span class="kw">_</span>, StarknetBlock, ValueQuery&gt;;
 
     <span class="comment">// Mapping for block number and hashes.
     </span><span class="attr">#[pallet::storage]
@@ -982,9 +1017,9 @@
     </span><span class="kw">impl</span>&lt;T: Config&gt; GenesisBuild&lt;T&gt; <span class="kw">for </span>GenesisConfig&lt;T&gt; {
         <span class="kw">fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) {
             &lt;Pallet&lt;T&gt;&gt;::store_block(U256::zero());
-            frame_support::storage::unhashed::put::&lt;StarknetStorageSchema&gt;(
+            frame_support::storage::unhashed::put::&lt;StarknetStorageSchemaVersion&gt;(
                 PALLET_STARKNET_SCHEMA,
-                <span class="kw-2">&amp;</span>StarknetStorageSchema::V1,
+                <span class="kw-2">&amp;</span>StarknetStorageSchemaVersion::V1,
             );
 
             <span class="kw">for </span>(address, class_hash) <span class="kw">in </span><span class="self">self</span>.contracts.iter() {
@@ -1025,9 +1060,9 @@
         InvalidContractClass,
         ClassHashMustBeSpecified,
         TooManyPendingTransactions,
-        InvalidCurrentBlock,
         StateReaderError,
         EmitEventError,
+        StateDiffError,
     }
 
     <span class="doccomment">/// The Starknet pallet external functions.
@@ -1069,7 +1104,7 @@
             // Check if contract is deployed
             </span><span class="macro">ensure!</span>(ContractClassHashes::&lt;T&gt;::contains_key(transaction.sender_address), Error::&lt;T&gt;::AccountNotDeployed);
 
-            <span class="kw">let </span>block = <span class="self">Self</span>::current_block().unwrap();
+            <span class="kw">let </span>block = <span class="self">Self</span>::current_block();
             <span class="kw">let </span>state = <span class="kw-2">&amp;mut </span><span class="self">Self</span>::create_state_reader()<span class="question-mark">?</span>;
             <span class="kw">match </span>transaction.execute(state, block, TxType::InvokeTx, <span class="prelude-val">None</span>) {
                 <span class="prelude-val">Ok</span>(v) =&gt; {
@@ -1082,6 +1117,7 @@
                 }
             }
 
+            <span class="self">Self</span>::apply_state_diffs(state).map_err(|<span class="kw">_</span>| Error::&lt;T&gt;::StateDiffError)<span class="question-mark">?</span>;
             <span class="comment">// Append the transaction to the pending transactions.
             </span>Pending::&lt;T&gt;::try_append(transaction).unwrap();
 
@@ -1122,14 +1158,7 @@
             </span><span class="macro">ensure!</span>(transaction.contract_class.is_some(), Error::&lt;T&gt;::ContractClassMustBeSpecified);
 
             <span class="comment">// Get current block
-            </span><span class="kw">let </span>block = <span class="kw">match </span><span class="self">Self</span>::current_block() {
-                <span class="prelude-val">Some</span>(b) =&gt; b,
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="macro">log!</span>(error, <span class="string">&quot;Current block is None&quot;</span>);
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(Error::&lt;T&gt;::InvalidCurrentBlock.into());
-                }
-            };
-
+            </span><span class="kw">let </span>block = <span class="self">Self</span>::current_block();
             <span class="comment">// Create state reader from substrate storage
             </span><span class="kw">let </span>state = <span class="kw-2">&amp;mut </span><span class="self">Self</span>::create_state_reader()<span class="question-mark">?</span>;
 
@@ -1143,8 +1172,8 @@
 
             <span class="comment">// Execute transaction
             </span><span class="kw">match </span>transaction.execute(state, block, TxType::DeclareTx, <span class="prelude-val">Some</span>(contract_class.clone())) {
-                <span class="prelude-val">Ok</span>(v) =&gt; {
-                    <span class="macro">log!</span>(debug, <span class="string">&quot;Transaction executed successfully: {:?}&quot;</span>, v.unwrap_or_default());
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="macro">log!</span>(debug, <span class="string">&quot;Declare Transaction executed successfully.&quot;</span>);
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">log!</span>(error, <span class="string">&quot;Transaction execution failed: {:?}&quot;</span>, e);
@@ -1156,7 +1185,8 @@
             </span>Pending::&lt;T&gt;::try_append(transaction.clone()).or(<span class="prelude-val">Err</span>(Error::&lt;T&gt;::TooManyPendingTransactions))<span class="question-mark">?</span>;
 
             <span class="comment">// Associate contract class to class hash
-            </span><span class="self">Self</span>::associate_class_hash(class_hash, contract_class.into())<span class="question-mark">?</span>;
+            </span><span class="self">Self</span>::set_contract_class_hash(class_hash, contract_class.into())<span class="question-mark">?</span>;
+            <span class="self">Self</span>::apply_state_diffs(state).map_err(|<span class="kw">_</span>| Error::&lt;T&gt;::StateDiffError)<span class="question-mark">?</span>;
 
             <span class="comment">// TODO: Update class hashes root
 
@@ -1187,13 +1217,7 @@
             );
 
             <span class="comment">// Get current block
-            </span><span class="kw">let </span>block = <span class="kw">match </span><span class="self">Self</span>::current_block() {
-                <span class="prelude-val">Some</span>(b) =&gt; b,
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="macro">log!</span>(error, <span class="string">&quot;Current block is None&quot;</span>);
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(Error::&lt;T&gt;::InvalidCurrentBlock.into());
-                }
-            };
+            </span><span class="kw">let </span>block = <span class="self">Self</span>::current_block();
 
             <span class="kw">let </span>state = <span class="kw-2">&amp;mut </span><span class="self">Self</span>::create_state_reader()<span class="question-mark">?</span>;
             <span class="kw">match </span>transaction.execute(state, block, TxType::DeployAccountTx, <span class="prelude-val">None</span>) {
@@ -1210,14 +1234,10 @@
             </span>Pending::&lt;T&gt;::try_append(transaction.clone()).unwrap();
 
             <span class="comment">// Associate contract class to class hash
-            </span><span class="self">Self</span>::associate_contract_class(
-                transaction.clone().sender_address,
-                transaction.clone().call_entrypoint.class_hash.unwrap(),
-            )<span class="question-mark">?</span>;
+            // TODO: update state root
+            </span><span class="self">Self</span>::apply_state_diffs(state).map_err(|<span class="kw">_</span>| Error::&lt;T&gt;::StateDiffError)<span class="question-mark">?</span>;
 
-            <span class="comment">// TODO: Apply state diff and update state root
-
-            </span><span class="prelude-val">Ok</span>(())
+            <span class="prelude-val">Ok</span>(())
         }
 
         <span class="doccomment">/// Consume a message from L1.
@@ -1240,7 +1260,7 @@
             // Check if contract is deployed
             </span><span class="macro">ensure!</span>(ContractClassHashes::&lt;T&gt;::contains_key(transaction.sender_address), Error::&lt;T&gt;::AccountNotDeployed);
 
-            <span class="kw">let </span>block = <span class="self">Self</span>::current_block().unwrap();
+            <span class="kw">let </span>block = <span class="self">Self</span>::current_block();
             <span class="kw">let </span>state = <span class="kw-2">&amp;mut </span><span class="self">Self</span>::create_state_reader()<span class="question-mark">?</span>;
             <span class="kw">match </span>transaction.execute(state, block, TxType::L1HandlerTx, <span class="prelude-val">None</span>) {
                 <span class="prelude-val">Ok</span>(v) =&gt; {
@@ -1255,9 +1275,9 @@
             <span class="comment">// Append the transaction to the pending transactions.
             </span>Pending::&lt;T&gt;::try_append(transaction.clone()).or(<span class="prelude-val">Err</span>(Error::&lt;T&gt;::TooManyPendingTransactions))<span class="question-mark">?</span>;
 
-            <span class="comment">// TODO: Apply state diff and update state root
+            <span class="self">Self</span>::apply_state_diffs(state).map_err(|<span class="kw">_</span>| Error::&lt;T&gt;::StateDiffError)<span class="question-mark">?</span>;
 
-            </span><span class="prelude-val">Ok</span>(())
+            <span class="prelude-val">Ok</span>(())
         }
     }
 
@@ -1269,8 +1289,8 @@
         ///
         /// The current block hash.
         </span><span class="attr">#[inline(always)]
-        </span><span class="kw">pub fn </span>current_block_hash() -&gt; <span class="prelude-ty">Option</span>&lt;H256&gt; {
-            <span class="self">Self</span>::current_block().map(|block| block.header.hash())
+        </span><span class="kw">pub fn </span>current_block_hash() -&gt; H256 {
+            <span class="self">Self</span>::current_block().header().hash()
         }
 
         <span class="doccomment">/// Get the block hash of the previous block.
@@ -1332,7 +1352,7 @@
             <span class="kw">let </span>protocol_version = <span class="prelude-val">None</span>;
             <span class="kw">let </span>extra_data = <span class="prelude-val">None</span>;
 
-            <span class="kw">let </span>block = Block::new(Header::new(
+            <span class="kw">let </span>block = StarknetBlock::new(StarknetHeader::new(
                 parent_block_hash,
                 block_number,
                 global_state_root,
@@ -1348,8 +1368,11 @@
             <span class="comment">// Save the current block.
             </span>CurrentBlock::&lt;T&gt;::put(block.clone());
             <span class="comment">// Save the block number &lt;&gt; hash mapping.
-            </span>BlockHash::&lt;T&gt;::insert(block_number, block.header.hash());
+            </span>BlockHash::&lt;T&gt;::insert(block_number, block.header().hash());
             Pending::&lt;T&gt;::kill();
+
+            <span class="kw">let </span>digest = DigestItem::Consensus(MADARA_ENGINE_ID, PostLog::BlockHash(block.header().hash()).encode());
+            frame_system::Pallet::&lt;T&gt;::deposit_log(digest);
         }
 
         <span class="doccomment">/// Associate a contract class hash with a contract class info
@@ -1358,7 +1381,7 @@
         ///
         /// * `contract_class_hash` - The contract class hash.
         /// * `class_info` - The contract class info.
-        </span><span class="kw">fn </span>associate_class_hash(
+        </span><span class="kw">fn </span>set_contract_class_hash(
             contract_class_hash: ClassHashWrapper,
             class_info: ContractClassWrapper,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;(), DispatchError&gt; {
@@ -1367,7 +1390,6 @@
                 !ContractClasses::&lt;T&gt;::contains_key(contract_class_hash),
                 Error::&lt;T&gt;::ContractClassAlreadyAssociated
             );
-
             ContractClasses::&lt;T&gt;::insert(contract_class_hash, class_info);
 
             <span class="prelude-val">Ok</span>(())
@@ -1379,7 +1401,7 @@
         ///
         /// * `contract_address` - The contract address.
         /// * `contract_class_hash` - The contract class hash.
-        </span><span class="kw">fn </span>associate_contract_class(
+        </span><span class="kw">fn </span>set_class_hash_at(
             contract_address: ContractAddressWrapper,
             contract_class_hash: ClassHashWrapper,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;(), DispatchError&gt; {
@@ -1424,6 +1446,42 @@
                 }
             }
 
+            <span class="prelude-val">Ok</span>(())
+        }
+
+        <span class="doccomment">/// Apply the state diff returned by the starknet execution.
+        ///
+        /// # Argument
+        ///
+        /// * `state` - The state constructed for the starknet execution engine.
+        ///
+        /// # Error
+        ///
+        /// Returns an error if it fails to apply the state diff of newly deployed contracts.
+        </span><span class="kw">pub fn </span>apply_state_diffs(state: <span class="kw-2">&amp;</span>CachedState&lt;DictStateReader&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), StateDiffError&gt; {
+            <span class="comment">// Get all the state diffs
+            </span><span class="kw">let </span>StateDiff { deployed_contracts, storage_diffs, declared_classes: _declared_classes, nonces } =
+                state.to_state_diff();
+            <span class="comment">// Store the newly deployed contracts in substrate storage.
+            </span>deployed_contracts.iter().try_for_each(|(address, class_hash)| {
+                <span class="self">Self</span>::set_class_hash_at(address.<span class="number">0.0</span>.<span class="number">0</span>, class_hash.<span class="number">0.0</span>).map_err(|<span class="kw">_</span>| {
+                    <span class="macro">log!</span>(
+                        error,
+                        <span class="string">&quot;Failed to save newly deployed contract at address: {:?} with class hash: {:?}&quot;</span>,
+                        address.<span class="number">0.0</span>.<span class="number">0</span>,
+                        class_hash.<span class="number">0.0
+                    </span>);
+                    StateDiffError::DeployedContractError
+                })
+            })<span class="question-mark">?</span>;
+            <span class="comment">// Store the modifications of storage vars.
+            </span>storage_diffs.iter().for_each(|(address, diffs)| {
+                diffs.iter().for_each(|(key, value)| {
+                    StorageView::&lt;T&gt;::insert((address.<span class="number">0.0</span>.<span class="number">0</span>, H256::from_slice(<span class="kw-2">&amp;</span>key.<span class="number">0.0</span>.<span class="number">0</span>)), U256::from(value.<span class="number">0</span>))
+                })
+            });
+            <span class="comment">// Store the new nonces.
+            </span>nonces.iter().for_each(|(address, nonce)| Nonces::&lt;T&gt;::insert(address.<span class="number">0.0</span>.<span class="number">0</span>, U256::from(nonce.<span class="number">0.0</span>)));
             <span class="prelude-val">Ok</span>(())
         }
 
