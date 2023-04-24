@@ -63,4 +63,8 @@ pub trait StarknetRpcApi {
     /// Call a contract function at a given block id
     #[method(name = "call")]
     fn call(&self, request: FunctionCall, block_id: BlockId) -> RpcResult<Vec<String>>;
+	
+    /// Returns the transactions in the transaction pool, recognized by this sequencer
+	#[method(name = "pendingTransactions")]
+    fn pending_transactions(&self) -> RpcResult<Vec<String>>;
 }

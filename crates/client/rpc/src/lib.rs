@@ -24,8 +24,9 @@ use sp_blockchain::HeaderBackend;
 use sp_core::U256;
 use sp_runtime::testing::H256;
 use sp_runtime::traits::Block as BlockT;
+//use sp_core::offchain::TransactionPoolExt;
+//use sc_tran
 
-/// A Starknet RPC server for Madara
 pub struct Starknet<B: BlockT, BE, C> {
     client: Arc<C>,
     backend: Arc<mc_db::Backend<B>>,
@@ -81,6 +82,17 @@ where
     fn block_number(&self) -> RpcResult<mc_rpc_core::BlockNumber> {
         self.current_block_number()
     }
+
+	fn pending_transactions(&self) -> RpcResult<Vec<String>> {
+        let runtime_api = self.client.runtime_api();
+
+        let substrate_block_hash = self.client.info().best_hash;
+		let pending_transactions = runtime_api.pending_transactions(substrate_block_hash );
+
+		let transaction_serialized = pending_transactions.iter().map(|t| format!( "{:?}",t)).collect();
+		Ok(transaction_serialized )
+	}
+
 
     fn block_hash_and_number(&self) -> RpcResult<mc_rpc_core::BlockHashAndNumber> {
         let block_number = self.current_block_number()?;

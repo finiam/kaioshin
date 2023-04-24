@@ -42,6 +42,8 @@ use sp_std::prelude::*;
 use sp_version::RuntimeVersion;
 /// Import the types.
 pub use types::*;
+use mp_starknet::transaction::types::Transaction;
+
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
@@ -275,6 +277,13 @@ impl_runtime_apis! {
         fn call(address: ContractAddressWrapper, function_selector: H256, calldata: Vec<U256>) -> Result<Vec<StarkFeltWrapper>, DispatchError> {
             Starknet::call_contract(address, function_selector, calldata)
         }
+
+		fn pending_transactions() -> Vec<Transaction> {
+			let pending = Starknet::pending();
+            let transactions: Vec<Transaction> = pending.into_iter().map(|(transaction, _)| transaction).collect();
+
+			transactions
+		}
     }
 
     #[cfg(feature = "runtime-benchmarks")]
