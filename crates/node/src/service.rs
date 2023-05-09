@@ -303,8 +303,12 @@ pub fn new_full(mut config: Configuration, sealing: Option<Sealing>) -> Result<T
     let (command_sink, commands_stream) = mpsc::channel(1000);
 
     let overrides = overrides_handle(client.clone());
-    let starknet_rpc_params =
-        StarknetDeps { client: client.clone(), madara_backend: madara_backend.clone(), overrides: overrides.clone() };
+    let starknet_rpc_params = StarknetDeps {
+        client: client.clone(),
+        madara_backend: madara_backend.clone(),
+        overrides: overrides.clone(),
+        transaction_pool: transaction_pool.clone(),
+    };
 
     let rpc_extensions_builder = {
         let client = client.clone();

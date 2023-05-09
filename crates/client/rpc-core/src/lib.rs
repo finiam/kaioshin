@@ -6,6 +6,7 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use serde::{Deserialize, Serialize};
+use sp_core::Bytes;
 
 pub type FieldElement = String;
 pub type BlockNumber = u64;
@@ -63,8 +64,8 @@ pub trait StarknetRpcApi {
     /// Call a contract function at a given block id
     #[method(name = "call")]
     fn call(&self, request: FunctionCall, block_id: BlockId) -> RpcResult<Vec<String>>;
-	
+
     /// Returns the transactions in the transaction pool, recognized by this sequencer
-	#[method(name = "pendingTransactions")]
-    fn pending_transactions(&self) -> RpcResult<Vec<String>>;
+    #[method(name = "pendingTransactions")]
+    fn pending_transactions(&self) -> RpcResult<Vec<Bytes>>;
 }

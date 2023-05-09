@@ -32,7 +32,7 @@ pub struct FullDeps<C, P> {
     /// Manual seal command sink
     pub command_sink: Option<mpsc::Sender<EngineCommand<Hash>>>,
     /// Starknet dependencies
-    pub starknet: StarknetDeps<C, Block>,
+    pub starknet: StarknetDeps<C, P, Block>,
 }
 
 /// Instantiate all full RPC extensions.
@@ -58,7 +58,15 @@ where
 
     module.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
     module.merge(TransactionPayment::new(client.clone()).into_rpc())?;
-    module.merge(Starknet::new(client, starknet_params.madara_backend, starknet_params.overrides).into_rpc())?;
+    module.merge(
+        Starknet::new(
+            client,
+            starknet_params.madara_backend,
+            starknet_params.transaction_pool,
+            starknet_params.overrides,
+        )
+        .into_rpc(),
+    )?;
 
     if let Some(command_sink) = command_sink {
         module.merge(

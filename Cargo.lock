@@ -4261,11 +4261,14 @@ dependencies = [
  "hex",
  "jsonrpsee",
  "log",
+ "madara-runtime",
  "mc-db",
  "mc-rpc-core",
  "mc-storage",
  "pallet-starknet",
  "sc-client-api",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-arithmetic",
  "sp-blockchain",
@@ -4281,6 +4284,7 @@ dependencies = [
  "jsonrpsee",
  "serde",
  "sp-blockchain",
+ "sp-core 7.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.40)",
 ]
 
 [[package]]

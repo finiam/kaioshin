@@ -22,6 +22,7 @@ pub use frame_support::weights::{IdentityFee, Weight};
 pub use frame_support::{construct_runtime, parameter_types, StorageValue};
 pub use frame_system::Call as SystemCall;
 use mp_starknet::execution::ContractAddressWrapper;
+use mp_starknet::transaction::types::Transaction;
 pub use pallet_balances::Call as BalancesCall;
 use pallet_grandpa::{fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 /// Import the StarkNet pallet.
@@ -42,8 +43,6 @@ use sp_std::prelude::*;
 use sp_version::RuntimeVersion;
 /// Import the types.
 pub use types::*;
-use mp_starknet::transaction::types::Transaction;
-
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
@@ -278,12 +277,12 @@ impl_runtime_apis! {
             Starknet::call_contract(address, function_selector, calldata)
         }
 
-		fn pending_transactions() -> Vec<Transaction> {
-			let pending = Starknet::pending();
+        fn pending_transactions() -> Vec<Transaction> {
+            let pending = Starknet::pending();
             let transactions: Vec<Transaction> = pending.into_iter().map(|(transaction, _)| transaction).collect();
 
-			transactions
-		}
+            transactions
+        }
     }
 
     #[cfg(feature = "runtime-benchmarks")]

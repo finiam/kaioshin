@@ -18,29 +18,40 @@ use mc_rpc_core::{BlockHashAndNumber, BlockId as StarknetBlockId, FunctionCall};
 use mc_storage::OverrideHandle;
 use pallet_starknet::runtime_api::StarknetRuntimeApi;
 use sc_client_api::backend::{Backend, StorageProvider};
+use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
+use sc_transaction_pool_api::{error, PoolStatus, ReadyTransactions};
 use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_arithmetic::traits::UniqueSaturatedInto;
 use sp_blockchain::HeaderBackend;
-use sp_core::U256;
+use sp_core::{Bytes, Encode, U256};
 use sp_runtime::testing::H256;
 use sp_runtime::traits::Block as BlockT;
-//use sp_core::offchain::TransactionPoolExt;
-//use sc_tran
+use pallet_starknet::Call;
+use sc_transaction_pool::FullPool;
+//use madara_runtime ;
+// use sp_core::offchain::TransactionPoolExt;
+// use sc_tran
 
-pub struct Starknet<B: BlockT, BE, C> {
+pub struct Starknet<B: BlockT, P, BE, C> {
     client: Arc<C>,
     backend: Arc<mc_db::Backend<B>>,
+    transaction_pool: Arc<P>,
     overrides: Arc<OverrideHandle<B>>,
     _marker: PhantomData<(B, BE)>,
 }
 
-impl<B: BlockT, BE, C> Starknet<B, BE, C> {
-    pub fn new(client: Arc<C>, backend: Arc<mc_db::Backend<B>>, overrides: Arc<OverrideHandle<B>>) -> Self {
-        Self { client, backend, overrides, _marker: PhantomData }
+impl<B: BlockT, P, BE, C> Starknet<B, P, BE, C> {
+    pub fn new(
+        client: Arc<C>,
+        backend: Arc<mc_db::Backend<B>>,
+        transaction_pool: Arc<P>,
+        overrides: Arc<OverrideHandle<B>>,
+    ) -> Self {
+        Self { client, backend, transaction_pool, overrides, _marker: PhantomData }
     }
 }
 
-impl<B, BE, C> Starknet<B, BE, C>
+impl<B, P, BE, C> Starknet<B, P, BE, C>
 where
     B: BlockT,
     C: HeaderBackend<B> + 'static,
@@ -50,7 +61,7 @@ where
     }
 }
 
-impl<B, BE, C> Starknet<B, BE, C>
+impl<B, P, BE, C> Starknet<B, P, BE, C>
 where
     B: BlockT,
     C: HeaderBackend<B> + StorageProvider<B, BE> + 'static,
@@ -71,28 +82,25 @@ where
     }
 }
 
-impl<B, BE, C> StarknetRpcApiServer for Starknet<B, BE, C>
+impl<B, P, BE, C> StarknetRpcApiServer for Starknet<B, P, BE, C>
 where
     B: BlockT,
     BE: Backend<B> + 'static,
     C: HeaderBackend<B> + StorageProvider<B, BE> + 'static,
     C: ProvideRuntimeApi<B>,
     C::Api: StarknetRuntimeApi<B>,
+    P: TransactionPool + 'static,
 {
     fn block_number(&self) -> RpcResult<mc_rpc_core::BlockNumber> {
         self.current_block_number()
     }
 
-	fn pending_transactions(&self) -> RpcResult<Vec<String>> {
-        let runtime_api = self.client.runtime_api();
+    fn pending_transactions(&self) -> RpcResult<Vec<Bytes>> {
+        let transactions: Vec<_> = self.transaction_pool.ready().map(|tx| tx/*.data().decode::<Call>()*/).collect();
 
-        let substrate_block_hash = self.client.info().best_hash;
-		let pending_transactions = runtime_api.pending_transactions(substrate_block_hash );
-
-		let transaction_serialized = pending_transactions.iter().map(|t| format!( "{:?}",t)).collect();
-		Ok(transaction_serialized )
-	}
-
+        //println!("{:?}", transactions);
+        Ok(self.transaction_pool.ready().map(|tx| tx.data().encode().into()).collect())
+    }
 
     fn block_hash_and_number(&self) -> RpcResult<mc_rpc_core::BlockHashAndNumber> {
         let block_number = self.current_block_number()?;
