@@ -16,7 +16,7 @@ use sc_client_api::{Backend, StorageProvider};
 use sc_consensus_manual_seal::rpc::EngineCommand;
 pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi, BlockT};
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 pub use starknet::StarknetDeps;
@@ -45,7 +45,7 @@ where
     C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
     C::Api: BlockBuilder<Block>,
     C::Api: pallet_starknet::runtime_api::StarknetRuntimeApi<Block>,
-    P: TransactionPool + 'static,
+    P: TransactionPool<Block= Block> + 'static,
     BE: Backend<Block> + 'static,
 {
     use mc_rpc::{Starknet, StarknetRpcApiServer};

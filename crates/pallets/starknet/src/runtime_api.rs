@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use sp_runtime::DispatchError;
 
 use crate::types::StarkFeltWrapper;
+use sp_runtime::traits::Block as BlockT;
 
 sp_api::decl_runtime_apis! {
     pub trait StarknetRuntimeApi {
@@ -18,5 +19,6 @@ sp_api::decl_runtime_apis! {
         fn call(address: ContractAddressWrapper, function_selector: H256, calldata: Vec<U256>) -> Result<Vec<StarkFeltWrapper>, DispatchError>;
         // Return pending transactions
         fn pending_transactions() -> Vec<Transaction>;
+	    fn extrinsic_filter(xts: Vec<<Block as BlockT>::Extrinsic>) -> Vec<Transaction>;
     }
 }

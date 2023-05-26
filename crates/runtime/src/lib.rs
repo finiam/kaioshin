@@ -28,6 +28,7 @@ use pallet_grandpa::{fg_primitives, AuthorityId as GrandpaId, AuthorityList as G
 /// Import the StarkNet pallet.
 pub use pallet_starknet;
 use pallet_starknet::types::StarkFeltWrapper;
+use pallet_starknet::Call::invoke;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -282,6 +283,13 @@ impl_runtime_apis! {
             let transactions: Vec<Transaction> = pending.into_iter().map(|(transaction, _)| transaction).collect();
 
             transactions
+        }
+
+        fn extrinsic_filter(xts: Vec<<Block as BlockT>::Extrinsic>) -> Vec<Transaction>{
+            xts.into_iter().filter_map(|xt| match xt.function {
+                RuntimeCall::Starknet( invoke { transaction }) => Some(transaction),
+                _ => None
+            }).collect::<Vec<Transaction>>()
         }
     }
 

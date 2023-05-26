@@ -89,17 +89,29 @@ where
     C: HeaderBackend<B> + StorageProvider<B, BE> + 'static,
     C: ProvideRuntimeApi<B>,
     C::Api: StarknetRuntimeApi<B>,
-    P: TransactionPool + 'static,
+    P: TransactionPool<Block = B> + 'static ,
 {
+
+
     fn block_number(&self) -> RpcResult<mc_rpc_core::BlockNumber> {
         self.current_block_number()
     }
 
-    fn pending_transactions(&self) -> RpcResult<Vec<Bytes>> {
-        let transactions: Vec<_> = self.transaction_pool.ready().map(|tx| tx/*.data().decode::<Call>()*/).collect();
+	fn pending_transactions(&self) -> RpcResult<Vec<Bytes>> {
+        let substrate_block_hash = self.client.info().best_hash;
 
-        //println!("{:?}", transactions);
-        Ok(self.transaction_pool.ready().map(|tx| tx.data().encode().into()).collect())
+		let mut transactions: Vec<<B as BlockT>::Extrinsic> = Vec::new();
+
+		transactions.extend(
+		self.transaction_pool.ready().map(|tx|  tx.data().clone()).collect::<Vec<<B as BlockT>::Extrinsic>>());
+
+
+
+        let api = self.client.runtime_api();
+        let starknet_tx = api.extrinsic_filter(substrate_block_hash, transactions).unwrap();
+
+		Ok(vec![].into())
+        //Ok(starknet_tx)
     }
 
     fn block_hash_and_number(&self) -> RpcResult<mc_rpc_core::BlockHashAndNumber> {
@@ -264,3 +276,5 @@ mod tests {
         assert!(string_to_h256(hex_str_4).is_err());
     }
 }
+
+
