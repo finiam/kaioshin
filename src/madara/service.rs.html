@@ -555,7 +555,6 @@
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 </span><span class="kw">use </span>std::cell::RefCell;
@@ -567,6 +566,7 @@
 <span class="kw">use </span>futures::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>madara_runtime::opaque::Block;
 <span class="kw">use </span>madara_runtime::{<span class="self">self</span>, Hash, RuntimeApi};
+<span class="kw">use </span>mc_block_proposer::ProposerFactory;
 <span class="kw">use </span>mc_mapping_sync::MappingSyncWorker;
 <span class="kw">use </span>mc_storage::overrides_handle;
 <span class="kw">use </span>pallet_starknet::runtime_api::StarknetRuntimeApi;
@@ -588,7 +588,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::cli::Sealing;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::StarknetDeps;
 <span class="kw">use </span><span class="kw">crate</span>::starknet::{db_config_dir, MadaraBackend};
-
 <span class="comment">// Our native executor instance.
 </span><span class="kw">pub struct </span>ExecutorDispatch;
 
@@ -779,7 +778,7 @@
 }
 
 <span class="doccomment">/// Builds a new service for a full client.
-</span><span class="kw">pub fn </span>new_full(<span class="kw-2">mut </span>config: Configuration, sealing: <span class="prelude-ty">Option</span>&lt;Sealing&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;TaskManager, ServiceError&gt; {
+</span><span class="kw">pub fn </span>new_full(config: Configuration, sealing: <span class="prelude-ty">Option</span>&lt;Sealing&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;TaskManager, ServiceError&gt; {
     <span class="kw">let </span>build_import_queue =
         <span class="kw">if </span>sealing.is_some() { build_manual_seal_import_queue } <span class="kw">else </span>{ build_aura_grandpa_import_queue };
 
@@ -794,6 +793,8 @@
         other: (block_import, grandpa_link, <span class="kw-2">mut </span>telemetry, madara_backend),
     } = new_partial(<span class="kw-2">&amp;</span>config, build_import_queue)<span class="question-mark">?</span>;
 
+    <span class="kw">let </span><span class="kw-2">mut </span>net_config = sc_network::config::FullNetworkConfiguration::new(<span class="kw-2">&amp;</span>config.network);
+
     <span class="kw">let </span>grandpa_protocol_name = sc_consensus_grandpa::protocol_standard_name(
         <span class="kw-2">&amp;</span>client.block_hash(<span class="number">0</span>).ok().flatten().expect(<span class="string">&quot;Genesis block exists; qed&quot;</span>),
         <span class="kw-2">&amp;</span>config.chain_spec,
@@ -802,7 +803,8 @@
     <span class="kw">let </span>warp_sync_params = <span class="kw">if </span>sealing.is_some() {
         <span class="prelude-val">None
     </span>} <span class="kw">else </span>{
-        config.network.extra_sets.push(sc_consensus_grandpa::grandpa_peers_set_config(grandpa_protocol_name.clone()));
+        net_config
+            .add_notification_protocol(sc_consensus_grandpa::grandpa_peers_set_config(grandpa_protocol_name.clone()));
         <span class="kw">let </span>warp_sync = Arc::new(sc_consensus_grandpa::warp_proof::NetworkProvider::new(
             backend.clone(),
             grandpa_link.shared_authority_set().clone(),
@@ -814,6 +816,7 @@
     <span class="kw">let </span>(network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
         sc_service::build_network(sc_service::BuildNetworkParams {
             config: <span class="kw-2">&amp;</span>config,
+            net_config,
             client: client.clone(),
             transaction_pool: transaction_pool.clone(),
             spawn_handle: task_manager.spawn_handle(),
@@ -843,7 +846,7 @@
     <span class="kw">let </span>starknet_rpc_params = StarknetDeps {
         client: client.clone(),
         madara_backend: madara_backend.clone(),
-        overrides: overrides.clone(),
+        overrides,
         sync_service: sync_service.clone(),
         starting_block,
     };
@@ -890,7 +893,6 @@
             Duration::new(<span class="number">6</span>, <span class="number">0</span>),
             client.clone(),
             backend,
-            overrides,
             madara_backend,
             <span class="number">3</span>,
             <span class="number">0</span>,
@@ -910,7 +912,6 @@
                 block_import,
                 <span class="kw-2">&amp;</span>task_manager,
                 prometheus_registry.as_ref(),
-                telemetry.as_ref(),
                 commands_stream,
             )<span class="question-mark">?</span>;
 
@@ -920,12 +921,11 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(task_manager);
         }
 
-        <span class="kw">let </span>proposer_factory = sc_basic_authorship::ProposerFactory::new(
+        <span class="kw">let </span>proposer_factory = ProposerFactory::new(
             task_manager.spawn_handle(),
             client.clone(),
             transaction_pool,
             prometheus_registry.as_ref(),
-            telemetry.as_ref().map(|x| x.handle()),
         );
 
         <span class="kw">let </span>slot_duration = sc_consensus_aura::slot_duration(<span class="kw-2">&amp;*</span>client)<span class="question-mark">?</span>;
@@ -1018,19 +1018,17 @@
     block_import: BoxBlockImport&lt;FullClient&gt;,
     task_manager: <span class="kw-2">&amp;</span>TaskManager,
     prometheus_registry: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Registry&gt;,
-    telemetry: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Telemetry&gt;,
     commands_stream: mpsc::Receiver&lt;sc_consensus_manual_seal::rpc::EngineCommand&lt;Hash&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ServiceError&gt;
 <span class="kw">where
     </span>RuntimeApi: ConstructRuntimeApi&lt;Block, FullClient&gt;,
     RuntimeApi: Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">let </span>proposer_factory = sc_basic_authorship::ProposerFactory::new(
+    <span class="kw">let </span>proposer_factory = ProposerFactory::new(
         task_manager.spawn_handle(),
         client.clone(),
         transaction_pool.clone(),
         prometheus_registry,
-        telemetry.as_ref().map(|x| x.handle()),
     );
 
     <span class="macro">thread_local!</span>(<span class="kw">static </span>TIMESTAMP: RefCell&lt;u64&gt; = RefCell::new(<span class="number">0</span>));
